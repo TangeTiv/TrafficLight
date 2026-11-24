@@ -90,7 +90,7 @@ static void handleEmergency(unsigned long now) {
   //    phasesGoto(PHASE_ALL_RED, T_EMG_HOLD, now);   // 强制进入全红并重置计时
   //    digitalWrite(PIN_BUZZ, HIGH);                 // 蜂鸣器响
   //    g_emgStartMs = now; g_emgActive = true;       // 记住"从什么时候开始响"
-  //    Serial.println(F("[emg] 紧急车辆优先，全红")); // 建议打日志
+  //    Serial.println(F("[emg] emergency vehicle priority, all red")); // 建议打日志
   //
   //  ⚠ 关键：不要用 delay(T_EMG_HOLD) 去"等 5 秒"。
   //    那会让整个系统停摆 5 秒，行人按键、测距、显示全都不响应 ——
@@ -139,7 +139,7 @@ void pedestrianUpdate(unsigned long now) {
   if (g_emgActive && (now - g_emgStartMs >= T_EMG_HOLD)) {
     digitalWrite(PIN_BUZZ, LOW);
     g_emgActive = false;
-    Serial.println(F("[emg] 紧急模式结束，恢复正常循环"));
+    Serial.println(F("[emg] emergency over, back to normal cycle"));
   }
 
   handleEmergency(now);

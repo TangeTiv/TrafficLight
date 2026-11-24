@@ -34,9 +34,9 @@ void setup() {
 
   Serial.println();
   Serial.println(F("=================================================="));
-  Serial.println(F(" 智能交通灯控制系统  骨架 vs0.0-骨架"));
-  Serial.println(F(" 硬件：Arduino Uno   对应指导文档：实验1"));
-  Serial.println(F(" 当前所有任务均为 TODO 状态，见各模块文件"));
+  Serial.println(F(" Smart Traffic Light   skeleton vs0.0"));
+  Serial.println(F(" Hardware: Arduino Uno   guide: Lab 1"));
+  Serial.println(F(" All tasks are TODO. See the module files."));
   Serial.println(F("=================================================="));
 
   phasesInit();          // 任务一(甲)：六个灯设为输出、进入初始相位、点亮
@@ -46,7 +46,7 @@ void setup() {
   trafficflowInit();     // 任务三(乙)：超声波引脚
   displayInit();         // 任务四(乙)：I2C 扫描 + （可选）LCD 初始化
 
-  Serial.println(F("[boot] 就绪。从 phases.cpp 的 TODO 开始吧"));
+  Serial.println(F("[boot] ready. Start with the TODO in phases.cpp"));
 }
 
 void loop() {

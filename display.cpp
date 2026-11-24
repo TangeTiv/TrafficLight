@@ -24,23 +24,23 @@
 //  已实现：I2C 扫描
 // ============================================================================
 void i2cScan() {
-  Serial.println(F("[i2c] 扫描总线中 ..."));
+  Serial.println(F("[i2c] scanning bus ..."));
   uint8_t found = 0;
   for (uint8_t addr = 1; addr < 127; addr++) {
     Wire.beginTransmission(addr);
     if (Wire.endTransmission() == 0) {
-      Serial.print(F("[i2c] 发现设备 0x"));
+      Serial.print(F("[i2c] found device 0x"));
       if (addr < 16) Serial.print('0');
       Serial.println(addr, HEX);
       found++;
     }
   }
   if (found == 0) {
-    Serial.println(F("[i2c] 没有找到任何设备 —— 检查 SDA->A4 / SCL->A5 / VCC->5V / GND"));
+    Serial.println(F("[i2c] no device found -- check SDA->A4 / SCL->A5 / VCC->5V / GND"));
   } else {
-    Serial.print(F("[i2c] 共 "));
+    Serial.print(F("[i2c] total "));
     Serial.print(found);
-    Serial.println(F(" 个设备"));
+    Serial.println(F(" device(s)"));
   }
 }
 
@@ -95,11 +95,11 @@ void displayInit() {
   lcd.print("TrafficLight");
   lcd.setCursor(0, 1);
   lcd.print("vs0.0 ready");
-  Serial.println(F("[display] LCD 已初始化，显示开机横幅"));
-  Serial.println(F("[display] 屏幕背光亮但没字 → 改 pins.h 里的 LCD_I2C_ADDR，或用螺丝刀拧转接板上的蓝色电位器调对比度"));
+  Serial.println(F("[display] LCD initialized, showing boot banner"));
+  Serial.println(F("[display] backlight on but no text -> fix LCD_I2C_ADDR in pins.h, or turn the blue trimpot"));
 #else
-  Serial.println(F("[display] LCD 未启用（pins.h 里 USE_LCD1602 = 0），当前只用串口输出"));
-  Serial.println(F("[display] 任务四第 2 步：装好 LiquidCrystal I2C 库后把那个开关改成 1"));
+  Serial.println(F("[display] LCD disabled (USE_LCD1602 = 0 in pins.h), serial only"));
+  Serial.println(F("[display] Task 4 step 2: install LiquidCrystal I2C, then set that switch to 1"));
 #endif
 }
 

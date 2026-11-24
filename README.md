@@ -34,13 +34,17 @@
 
 ```
 ==================================================
- 智能交通灯控制系统  骨架 vs0.0-骨架
- 硬件：Arduino Uno   对应指导文档：实验1
+ Smart Traffic Light   skeleton vs0.0
+ Hardware: Arduino Uno   guide: Lab 1
 ==================================================
-[selftest] 依次点亮六个灯，请核对顺序：南北红/黄/绿 → 东西红/黄/绿
-[selftest] 完成。若某个灯不亮、或顺序不对，先查接线，再怀疑代码
-[display] LCD 未启用（pins.h 里 USE_LCD1602 = 0），当前只用串口输出
-[boot] 就绪。从 phases.cpp 的 TODO 开始吧
+ All tasks are TODO. See the module files.
+[selftest] lighting 6 LEDs in order: NS R/Y/G -> EW R/Y/G
+[selftest] done. LED dark or wrong order? check wiring first
+[i2c] scanning bus ...
+[i2c] found device 0x27
+[i2c] total 1 device(s)
+[display] LCD disabled (USE_LCD1602 = 0 in pins.h), serial only
+[boot] ready. Start with the TODO in phases.cpp
 ```
 
 同时六个灯会**依次各亮 0.5 秒**。这就是硬件自检（`phasesSelfTest`）——它会告诉你
@@ -122,7 +126,7 @@ unsigned long calcGreenTime(float queueCm);  // 甲 提供 → 返回该方向�
 
 | 阶段 | 验收动作 | 通过标准 |
 | --- | --- | --- |
-| 环境 | 上传并打开串口 | 看到 `[boot] 就绪`，六个灯依次亮过 |
+| 环境 | 上传并打开串口 | 看到 `[boot] ready`，六个灯依次亮过 |
 | 任务一 | 盯着灯看 30 秒 | 三色循环正确；**任何时刻都没有两个方向同时绿灯** |
 | 任务一 | 看串口日志 | 相位名交替出现，每条间隔与设定时长一致 |
 | 任务二 | 按住 D3 | 立刻全红 + 蜂鸣器响，约 5 秒后自动恢复正常循环 |

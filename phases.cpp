@@ -63,7 +63,7 @@ void phasesApplyLights() {
 }
 
 void phasesSelfTest() {
-  Serial.println(F("[selftest] 依次点亮六个灯，请核对顺序：南北红/黄/绿 → 东西红/黄/绿"));
+  Serial.println(F("[selftest] lighting 6 LEDs in order: NS R/Y/G -> EW R/Y/G"));
   for (uint8_t i = 0; i < 6; i++) {
     digitalWrite(kLights[i], HIGH);
     // 这里用 delay() 是允许的：它只在开机时跑一次，不参与任何循环计时。
@@ -71,7 +71,7 @@ void phasesSelfTest() {
     delay(500);
     digitalWrite(kLights[i], LOW);
   }
-  Serial.println(F("[selftest] 完成。若某个灯不亮、或顺序不对，先查接线，再怀疑代码"));
+  Serial.println(F("[selftest] done. LED dark or wrong order? check wiring first"));
 }
 
 // ============================================================================
