@@ -113,37 +113,50 @@ const char* phasesName(Phase p) {
 }
 
 // ============================================================================
-//  ★★★ 任务一：要你实现的就是下面这一个函数 ★★★
+//  ★★★ 任务一：相位迁移 ★★★
 // ============================================================================
+//  答辩会问到的四个点：
+//   1) 计时用减法 now - g_start >= g_dur，免疫 millis() 约 49.7 天的溢出。
+//   2) 两个方向都必须经过全红清空期（见图 1.3）：
+//          NS_GREEN → NS_YELLOW → ALL_RED
+//          EW_GREEN → EW_YELLOW → ALL_RED
+//      只有一边有全红是不对称的；真实路口也是每个黄灯后都要清空。
+//   3) ALL_RED 之后该放行哪个方向？5 个状态本身记不住这件事，
+//      所以用 g_nextGreen 在"进入全红"那一刻把答案存下来。
+//   4) 迁移时四件事的顺序：g_start → g_phase → g_dur → 刷新灯。
+//      写反是经典 bug（表现为灯卡住、或跳变得飞快）。
+// ============================================================================
+static Phase g_nextGreen = PHASE_EW_GREEN;   // 全红结束后要放行的方向
+
 void phasesUpdate(unsigned long now) {
-  // --------------------------------------------------------------------------
-  //  TODO（任务一）：实现相位迁移
-  //
-  //  目标：到点就切换到下一个相位；没到点就立刻返回，什么都不做。
-  //
-  //  第 1 步 · 判断到点了没
-  //      用下面这种"减法"写法，它天生免疫 millis() 约 49.7 天的溢出：
-  //              if (now - g_start >= g_dur) { ... }
-  //      务必不要写成  if (now > g_start + g_dur)  —— 那种写法在溢出那一刻会失效。
-  //
-  //  第 2 步 · 迁移顺序（一条直线，别绕圈）
-  //          NS_GREEN  → NS_YELLOW → ALL_RED
-  //          EW_GREEN  → EW_YELLOW → ALL_RED
-  //          到这里再回到 NS_GREEN / EW_GREEN 交替。
-  //      也就是说：南北绿之后不能直接切东西绿，中间必须经过「黄灯 → 全红」。
-  //
-  //  第 3 步 · 每次迁移都要按这个顺序做四件事（顺序写反是个经典 bug）
-  //          g_start = now;                     // 先重置计时基准
-  //          g_phase = 下一个相位;               // 再换相位
-  //          g_dur   = 该相位的默认时长;         // 绿灯先给 GREEN_BASE，配时会改写
-  //          phasesApplyLights();               // 立刻刷新灯
-  //      时长取值：黄灯 → T_YELLOW，全红 → T_ALL_RED，绿灯 → GREEN_BASE
-  //
-  //  第 4 步 ·（强烈建议）迁移时打一行串口日志，答辩演示非常有用
-  //          Serial.print('['); Serial.print(now); Serial.print(F("] "));
-  //          Serial.println(phasesName(g_phase));
-  //
-  //  自查：写完之后，任意时刻都不应出现"南北绿 + 东西绿"同时亮。
-  //        如果出现了，检查 g_phase 是否被赋成了越界的值（比如算错下标）。
-  // --------------------------------------------------------------------------
+  if (now - g_start < g_dur) return;         // 没到点就立刻返回，不阻塞任何人
+
+  // --- 第 1 步：决定下一个相位 ---
+  Phase next;
+  switch (g_phase) {
+    case PHASE_NS_GREEN:   next = PHASE_NS_YELLOW; break;
+    case PHASE_NS_YELLOW:  next = PHASE_ALL_RED;   g_nextGreen = PHASE_EW_GREEN; break;
+    case PHASE_EW_GREEN:   next = PHASE_EW_YELLOW; break;
+    case PHASE_EW_YELLOW:  next = PHASE_ALL_RED;   g_nextGreen = PHASE_NS_GREEN; break;
+    case PHASE_ALL_RED:    next = g_nextGreen;     break;  // 走"进入全红时"存下的方向
+    default:               next = PHASE_NS_GREEN;  break;  // 防御：正常不会到这里
+  }
+
+  // --- 第 2 步：迁移，这四行的顺序不能换 ---
+  g_start = now;                             // ① 先重置计时基准
+  g_phase = next;                            // ② 再换相位
+
+  switch (g_phase) {                         // ③ 设本相位的时长
+    case PHASE_NS_GREEN:
+    case PHASE_EW_GREEN:   g_dur = GREEN_BASE; break;
+    case PHASE_NS_YELLOW:
+    case PHASE_EW_YELLOW:  g_dur = T_YELLOW;   break;
+    default:               g_dur = T_ALL_RED;  break;
+  }
+
+  phasesApplyLights();                       // ④ 立刻刷新灯
+
+  // --- 第 3 步：日志，答辩演示时一眼能看出状态在动 ---
+  Serial.print('['); Serial.print(now); Serial.print(F("] "));
+  Serial.println(phasesName(g_phase));
 }
