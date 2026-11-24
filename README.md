@@ -12,7 +12,9 @@
 
 > **板子还没买？完全不影响开工。**
 >
-> - **想看灯真的动** → 把 `wokwi/diagram.json` 导进 https://wokwi.com/ ，步骤见 **`wokwi/README.md`**
+> - **想看灯真的动** → VS Code 装 **Wokwi for VS Code** 扩展，`Ctrl+Shift+B` 编译，
+>   再 `F1` → `Wokwi: Start Simulator`。一次性配置见 **`wokwi/README.md`**
+>   （`wokwi.toml` 和 `diagram.json` 已经放在本目录，电路也连好了）
 > - **想查语法有没有错** → 点"验证"编译**不需要插板子**，下面第 1 步的第 3 小步现在就能做
 >
 > 第 2 步以后是"板子到了之后"的流程。

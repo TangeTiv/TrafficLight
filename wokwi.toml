@@ -1,0 +1,22 @@
+# ============================================================================
+#  wokwi.toml  ·  Wokwi for VS Code 的配置
+# ----------------------------------------------------------------------------
+#  ⚠ 这个文件和 diagram.json 必须放在同一个目录，而且这个目录就是你在
+#    VS Code 里打开的文件夹（工作区根目录）。放错位置会报
+#    "wokwi.toml configuration file not found in workspace"。
+#
+#  ⚠ 路径一律用正斜杠 /。用反斜杠 \ 在别的电脑上会打不开。
+#
+#  Wokwi 不编译代码，它只读取下面 firmware 指向的 .hex 来跑仿真。
+#  所以每次改完代码，必须先编译：
+#      arduino-cli compile --fqbn arduino:avr:uno --output-dir build .
+#  或者用 VS Code 的 Ctrl+Shift+B（已配好 .vscode/tasks.json）。
+#
+#  产物文件名里的 "TrafficLight.ino" 来自主 sketch 的文件名。
+#  如果哪天你们改了主 .ino 的名字，这里两行也要跟着改。
+# ============================================================================
+
+[wokwi]
+version = 1
+firmware = 'build/TrafficLight.ino.hex'
+elf = 'build/TrafficLight.ino.elf'

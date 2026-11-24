@@ -1,98 +1,101 @@
-# Wokwi 仿真工程（没有硬件也能开工）
+# Wokwi 仿真（VS Code 插件路线）
 
-这个目录只有一件事：**让你们在没买硬件的情况下，也能看见灯真的在按相位切换。**
+> 电路图 `diagram.json` 和配置 `wokwi.toml` 都放在**仓库根目录**（和 `TrafficLight.ino` 同级），
+> 因为 Wokwi 扩展要求这两个文件必须在 VS Code 打开的那个文件夹里。
+> 本文件只是说明文档，放在这里不影响任何东西。
 
-`diagram.json` 就是电路图。它已经按 `pins.h` 的引脚分配连好了全部 18 个元件——
-6 个灯（各串一颗 220Ω 电阻）、2 个按键、超声波、蜂鸣器、LCD1602（I2C 模式）。
+## 为什么走这条路
 
-> **为什么要把电阻也画上？** 仿真里 LED 不串电阻照样会亮（Wokwi 不模拟电流），
-> 但你们买回实物后必须串。图上带着电阻，你照着接线时就不会漏掉它。
+| | VS Code 插件 | 网页版 |
+| --- | --- | --- |
+| 改完代码看效果 | `Ctrl+Shift+B` 再重跑 | 要重新粘文件 |
+| 多文件工程 | 直接用本地文件 | 12 个文件手工粘 |
+| 断点调试 | 支持（GDB） | 不支持 |
 
----
+## 一次性配置
 
-## 导入（约 5 分钟，只需做一次）
+**前提**：`arduino-cli` 已装在 `C:/Users/谭/tools/arduino-cli/`，AVR 内核 `arduino:avr@1.8.8` 已就绪。
+（已经在你们这台机器上装好并编译通过了，这一步不用重做。）
 
-1. 打开 https://wokwi.com/ ，用 GitHub 账号登录（**顺便就用了你们已有的账号**）
-2. 点 **+ New Project** → 选 **Arduino Uno**
-3. 左边代码区把自带的 `sketch.ino` 清空，改成粘我们自己的文件（见下一节）
-4. 点右上角的 **`<>`**（或按 `Ctrl+P`）打开文件列表，把本目录的 `diagram.json`
-   内容整个粘进 `diagram.json` 标签页（覆盖原来的）
-5. 点绿色 ▶ 开始仿真
+1. **装扩展**：VS Code 里搜 `Wokwi for VS Code` → Install
+2. **激活 License**：按 `F1` → 输入 `Wokwi: Request a new License` → 确认在浏览器打开 →
+   点 **GET YOUR LICENSE** → 登录 Wokwi 账号（免费注册）→ 浏览器和 VS Code 各确认一次 →
+   VS Code 提示 `License activated for ...`
+   > 免费账号够用，这个 license 是扩展的授权，和"项目公开/私有"无关。
+3. **打开正确的文件夹**：在 VS Code 里 `文件 → 打开文件夹`，选
+   **`D:\我的作业\单片机\TrafficLight`**（选这个目录本身，**不要选它的上一层**）
+   —— 选错了会报 `wokwi.toml configuration file not found in workspace`
+4. **编译**：`Ctrl+Shift+B`（任务已配好，等价于下面这行）
+   ```bash
+   arduino-cli compile --fqbn arduino:avr:uno --output-dir build .
+   ```
+   通过信号：`Sketch uses 7048 bytes (21%) of program storage space`
+5. **启动仿真**：`F1` → `Wokwi: Start Simulator`
 
-> 免费账号建的项目是**公开**的。你们的代码已经在 GitHub 公开了，所以无所谓。
-> 想改成私有需要付费，没必要。
-
-## 要粘哪些文件
-
-Wokwi 的 sketch 是**多文件**的，和你们本地 `TrafficLight/` 目录一一对应。
-一共 12 个文件，第一次全部粘一遍：
-
-```
-TrafficLight.ino     ← 主骨架（setup / loop）
-pins.h               ← 冻结层：引脚、枚举、参数
-phases.h  phases.cpp
-pedestrian.h  pedestrian.cpp
-trafficflow.h  trafficflow.cpp
-green_time.h  green_time.cpp
-display.h  display.cpp
-```
-
-**之后每次只需要粘你改动的那一个文件。** 甲改 `phases.cpp` 就只更新 `phases.cpp`，
-乙改 `pedestrian.cpp` 就只更新 `pedestrian.cpp` —— 两个人连这个都不会撞。
-
-> ⚠️ **分工纪律照样生效**：Wokwi 网页版里的改动不会自动回到本地文件。
-> **永远是"本地改 → 粘到 Wokwi 看效果"，不要反过来。** 否则你们的代码就有两份，必丢一份。
->
-> 嫌每次粘贴麻烦？看本文件最后一节"升级路线"。
-
-## 粘完之后应该看到什么
-
-点 ▶ 之后，**串口监视器会自动弹出来**（`diagram.json` 里配了 `"display": "auto"`），
-然后依次看到：
+## 日常工作流（三步，别漏第三步）
 
 ```
-==================================================
- 智能交通灯控制系统  骨架 vs0.0-骨架
- 硬件：Arduino Uno   对应指导文档：实验1
-==================================================
-[selftest] 依次点亮六个灯，请核对顺序：南北红/黄/绿 → 东西红/黄/绿
-[selftest] 完成。若某个灯不亮、或顺序不对，先查接线，再怀疑代码
-[boot] 就绪。从 phases.cpp 的 TODO 开始吧
+改代码 → Ctrl+Shift+B（编译） → F1: Wokwi: Start Simulator（或点仿真窗口的重启）
 ```
 
-**六个灯会挨个亮半秒，然后全部熄灭。**
+> ⚠ **Wokwi 不会编译你的代码。** 它只是读取 `build/TrafficLight.ino.hex` 去跑。
+> 所以最常见的困惑是"我明明改了代码，仿真里却没变" —— **90% 是忘了按 `Ctrl+Shift+B`**。
+> 养成顺序：改完先看编译有没有过，再启动仿真。
 
-⚠️ **之后灯不再动了，这是正常的** —— `phasesUpdate()` 还是空的。
-等你把任务一的代码填进去，它才会开始循环。别在这一步怀疑自己。
+## 编译时那两个警告是正常的
 
-## 仿真里的三个操作（很多人第一天找不到）
+```
+phases.cpp:118:33: warning: unused parameter 'now'
+pedestrian.cpp:78:43: warning: unused parameter 'now'
+```
+
+这不是错误，而是**"这两个 TODO 还没写"的进度指示器**：
+- `phasesUpdate(now)` 函数体空的 → 参数没用上
+- `handleEmergency(now)` 还没实现 → 参数没用上
+
+**你把任务一和任务二的代码填进去，这两条警告就自动消失。**
+哪天编译输出变干净了，说明这两个函数真的动了。这是一个很省事的自检信号。
+
+## 报错对照表
+
+| 报错 | 原因 | 怎么办 |
+| --- | --- | --- |
+| `wokwi.toml configuration file not found in workspace` | 打开的文件夹不对 | 打开 `TrafficLight` 本身；或 `F1` → `Wokwi: Select Config File` |
+| `firmware binary build/... not found in workspace` | 还没编译，或编译失败 | 先 `Ctrl+Shift+B`，确认 `build/` 里有 `.hex` |
+| `no diagram.json file in ...` | 文件被移走了 | 确认根目录有 `diagram.json`；没有就从 git 恢复 |
+| 仿真窗口一片空白 / 一直转圈 | License 没激活 | `F1` → `Wokwi: Request a new License` |
+| 串口没输出 | 仿真标签页被切到后台，Wokwi 会暂停 | 把仿真标签页保持在前台 |
+
+## 仿真里的三个操作
 
 | 要做的事 | 怎么做 |
-|---|---|
-| **改"车流量"** | 点一下超声波那个元件，会弹出一个 **distance 滑块**，拖它就能改距离（2–400cm）。任务三的动态配时就靠它验证 |
-| **按行人键** | 按键盘 **`P`**（或鼠标点绿色按钮）。我在 `diagram.json` 里给它设了快捷键 |
-| **按紧急键** | 按键盘 **`E`**（或鼠标点红色按钮） |
+| --- | --- |
+| **改"车流量"** | 点超声波元件 → 会弹出 **distance 滑块**，拖它改距离（2–400cm）。任务三的动态配时就靠它 |
+| **按行人键** | 按键盘 **`P`**，或鼠标点绿色按键 |
+| **按紧急键** | 按键盘 **`E`**，或鼠标点红色按键 |
 
-> 按键的 `bounce` 属性我设成了 `"1"`（**模拟真实抖动**）。
-> 这不是故意刁难你们 —— 任务二要求你们写消抖，如果仿真里的按键不抖，你们就永远测不出消抖有没有写对。
-> **想验证"我的消抖真的有用"，把它改成 `"0"` 再跑一遍对比。** 这正好是报告里的一张对照数据。
+> 按键的 `bounce` 属性保留为 `"1"`（**模拟真实抖动**）。
+> 这是有意的：任务二要求写消抖，如果仿真里的按键不抖，你就永远测不出消抖有没有写对。
+> 想验证效果，把 `diagram.json` 里两个按键的 `"bounce": "1"` 改成 `"0"` 再跑一遍，
+> 两次现象一对比，就是报告里一张现成的对照数据。
 
-## 现在会看到但不用管的两件事
+## 退路：网页版（扩展装不上时用）
 
-| 现象 | 原因 | 什么时候处理 |
-|---|---|---|
-| LCD 全黑、什么都不显示 | `USE_LCD1602` 还是 `0`，整个 LCD 模块被编译掉了 | 任务四。改开关前要先在 Wokwi 里加 `LiquidCrystal I2C` 库 |
-| 蜂鸣器不响 | `pedestrian.cpp` 的紧急模式还没写 | 任务二 |
+1. https://wokwi.com/ → GitHub 账号登录 → **+ New Project** → **Arduino Uno**
+2. 点右上角 `<>` 打开文件列表，把根目录 `diagram.json` 的内容**整个覆盖**原文件
+3. 新建同名文件，把 12 个文件（`sketch.ino` 贴 `TrafficLight.ino`、`pins.h`、5 组 `.h`/`.cpp`）
+   逐个粘进去，文件名必须和本地完全一致，`#include` 一个字都不要改
+4. 点 ▶ 运行
 
-## 升级路线：嫌粘贴烦了再走这条路
+网页版**和本地是两份代码**，所以只允许一个方向：
+**本地改 → 粘到网页版看效果**，不能反过来。日常只需粘你改动的那一个文件。
 
-Wokwi 官方有 **VS Code 扩展**，本地编译、仿真只负责显示，改完代码按一个键就重跑，
-**完全不用粘贴**，还支持 GDB 断点调试。代价是要装四样东西（VS Code、Wokwi 扩展、
-`arduino-cli`、AVR 内核）。
+## 硬件到货之后
 
-**现在别装。** 先用网页版把任务一跑通，等你们真的被粘贴烦到了，再来找我要配置。
+仿真的定位变成"回归测试"：改完代码先在仿真里跑一遍（快、不会烧板子），
+确认逻辑没错，再上传到实物验证电气部分。**先仿真后实物，返工量小一个数量级。**
 
 ---
 
-*电路改了？`diagram.json` 是普通文本，直接改里面的 `connections` 就行。
-每个元件和引脚的合法名字见 https://docs.wokwi.com/parts/ — 拼错一个字母整个图就打不开。*
+*`diagram.json` 是普通文本，改 `connections` 就能改电路。
+元件名和引脚名的合法写法见 https://docs.wokwi.com/parts/ ，**拼错一个字母整个图就打不开**。*
