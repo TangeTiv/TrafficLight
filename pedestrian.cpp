@@ -18,6 +18,11 @@ static volatile bool          g_emgRequest   = false;
 static volatile unsigned long g_pedLastIsrMs = 0;    // 消抖用：上次行人中断的时刻
 static volatile unsigned long g_emgLastIsrMs = 0;    // 消抖用：上次紧急中断的时刻
 
+// 按键当前是否真的按着。用来区分"按下"和"松开"——
+// 机械按键松开时弹片回弹，同样会产生下降沿，只靠 FALLING + 消抖是分不开的。
+static volatile bool          g_pedIsDown    = false;
+static volatile bool          g_emgIsDown    = false;
+
 // 已受理、正在排队等待"全红插入点"的行人请求。
 // 行人可以等，但不能丢 —— 所以它和 g_pedRequest 是两件事。
 static bool g_pedPending = false;
@@ -46,11 +51,35 @@ static void onPed() {
   //  ⚠ ISR 里不能用 delay() —— 只能比时间戳。
   //  ⚠ ISR 要短，不能在里面做串口打印、不能算配时、不能刷屏。
   // --------------------------------------------------------------------------
+  unsigned long now = millis();
+  if(now - g_pedLastIsrMs < DEBOUNCE_MS)
+    return;
+  g_pedLastIsrMs = now;
+
+  // 只有"电平真的从松开变成按下"才算一次请求。
+  // 松开时的弹跳也会进这个 ISR（FALLING），但那一瞬间引脚已经是 HIGH，
+  // 这里会直接把它的状态记为"没按"，不产生请求。
+  bool down = (digitalRead(PIN_PED) == LOW);
+  if (down == g_pedIsDown) return;   // 电平没变 → 是抖动，不是真正的沿
+  g_pedIsDown = down;
+  if (!down) return;                 // 松开：只记录状态，不请求
+
   g_pedRequest = true;
 }
 
 static void onEmg() {
   // TODO（任务二 · 第 2 处）：和上面一样，给紧急按键加消抖
+  unsigned long now = millis();
+  if(now - g_emgLastIsrMs < DEBOUNCE_MS)
+    return;
+  g_emgLastIsrMs = now;
+
+  // 和行人键同理：只在"真的按下"时请求，松开时的弹跳不算。
+  bool down = (digitalRead(PIN_EMG) == LOW);
+  if (down == g_emgIsDown) return;
+  g_emgIsDown = down;
+  if (!down) return;
+
   g_emgRequest = true;
 }
 
@@ -79,6 +108,12 @@ static void handleEmergency(unsigned long now) {
   if (!g_emgRequest) return;
   g_emgRequest = false;
 
+  // 已经在紧急模式里：忽略重复请求，不重置计时。
+  // 没有这一句的话，一旦按键重复或被抖动漏过，phasesGoto 会把 5 秒重新计时，
+  // 紧急模式就永远结束不了 —— 这比"多打一条日志"严重得多。
+  // 有了它，消抖就算漏了一次，系统行为也是对的（双保险）。
+  if (g_emgActive) return;
+
   // --------------------------------------------------------------------------
   //  TODO（任务二 · 第 3 处）：实现"紧急车辆立即抢占"
   //
@@ -97,16 +132,30 @@ static void handleEmergency(unsigned long now) {
   //    这正是本实验最大的坑（见指导文档 1.3.3）。
   //    正确做法是只记一个"结束时刻"，然后在 pedestrianUpdate 里检查它。
   // --------------------------------------------------------------------------
+  phasesGoto(PHASE_ALL_RED, T_EMG_HOLD, now);
+  digitalWrite(PIN_BUZZ, HIGH);
+  g_emgStartMs = now; g_emgActive = true;
+  Serial.print(F("[emg] emergency vehicle priority, all red @"));
+  Serial.print(now);
+  Serial.println(F("ms"));
 }
 
 // 行人过街：可以等，但不能丢
 static void handlePedestrian(unsigned long now) {
-  (void)now;   // 任务二里你会用到它（比如打带时间戳的日志）
-
   if (g_pedRequest) {
     g_pedRequest = false;
-    g_pedPending = true;      // 先锁存下来，等状态机走到全红再放行
-    // TODO（任务二 · 第 4 处 a）：打一行日志，说明请求已受理
+
+    // 已经有一个请求在排队时，重复的请求直接合并掉（不打印、不改状态）。
+    // 为什么需要：键盘自动重复约 30Hz（间隔 33ms），能穿过 30ms 消抖窗，
+    //            按住不放会产生好几条请求。和紧急模式同理，需要一层状态守卫。
+    //            注意这里不能 return —— 下面的"插入全红"逻辑还要继续走。
+    if (!g_pedPending) {
+      g_pedPending = true;    // 先锁存下来，等状态机走到全红再放行
+      // 第 1 条日志：请求"排队成功"。注意此时还没放行，行人还得等。
+      Serial.print(F("[ped] request queued @"));
+      Serial.print(now);
+      Serial.println(F("ms"));
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -129,6 +178,15 @@ static void handlePedestrian(unsigned long now) {
   //          （提示：此刻另一个方向的绿灯还没走完黄灯。）
   //          —— 这个问题老师很可能在答辩时问你，建议写进报告。
   // --------------------------------------------------------------------------
+  if (g_pedPending && phasesCurrent() == PHASE_ALL_RED)
+  {
+    phasesSetDuration(T_PED_CROSS);
+    g_pedPending = false;
+    // 第 2 条日志：行人相位真正开始。它一定发生在状态机进入全红之后。
+    Serial.print(F("[ped] cross start @"));
+    Serial.print(now);
+    Serial.println(F("ms"));
+  }
 }
 
 void pedestrianUpdate(unsigned long now) {
