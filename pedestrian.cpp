@@ -27,11 +27,16 @@ static volatile bool          g_emgIsDown    = false;
 // 行人可以等，但不能丢 —— 所以它和 g_pedRequest 是两件事。
 static bool g_pedPending = false;
 
-// 紧急模式：记"开始时刻 + 是否进行中"。
+// 紧急模式：记"全红开始的时刻 + 是否进行中"。
 // ⚠ 这里故意不写成"结束时刻 = now + T_EMG_HOLD"，因为用无符号数判断
 //   "现在有没有超过结束时刻"会牵扯到回绕问题。记开始时刻、每轮比一次
 //   "过去了多久"，才是既安全又好读的写法 —— 和 phases 里的计时方式一致。
-static unsigned long g_emgStartMs = 0;
+//
+// ⚠ 为什么记的是"全红开始"而不是"按键时刻"：紧急抢占会先给当前方向
+//   T_YELLOW(3 秒) 黄灯缓冲，全红比按键晚 3 秒才开始。若从按键时刻计时，
+//   实际全红只剩 2 秒，紧急车辆根本不够通过。
+//   0 表示"还在黄灯缓冲中，尚未进入全红"。
+static unsigned long g_emgRedSince = 0;
 static bool          g_emgActive  = false;
 
 // ============================================================================
@@ -132,10 +137,27 @@ static void handleEmergency(unsigned long now) {
   //    这正是本实验最大的坑（见指导文档 1.3.3）。
   //    正确做法是只记一个"结束时刻"，然后在 pedestrianUpdate 里检查它。
   // --------------------------------------------------------------------------
-  phasesGoto(PHASE_ALL_RED, T_EMG_HOLD, now);
+  // 按当前相位分三种情况抢占。
+  // 关键：绿灯不能直接跳全红 —— 此刻可能已经有车越过停止线、正在路口中间，
+  // 瞬间转红等于让人停在路口里。真实路口的黄灯就是干这件事的：它不只是
+  // "提醒减速"，而是给已经过线的车一个安全通过的窗口。
+  Phase cur = phasesCurrent();
+  if (cur == PHASE_NS_GREEN || cur == PHASE_EW_GREEN) {
+    phasesGoto((cur == PHASE_NS_GREEN) ? PHASE_NS_YELLOW : PHASE_EW_YELLOW,
+               T_YELLOW, now);
+    g_emgRedSince = 0;                    // 黄灯期间不算进 5 秒
+    Serial.print(F("[emg] priority: yellow buffer first @"));
+  } else if (cur == PHASE_NS_YELLOW || cur == PHASE_EW_YELLOW) {
+    g_emgRedSince = 0;                    // 已经在黄灯里：不打断，等它自然结束
+    Serial.print(F("[emg] priority: waiting yellow to end @"));
+  } else {
+    phasesGoto(PHASE_ALL_RED, T_EMG_HOLD, now);   // 本来就是全红，直接延长
+    g_emgRedSince = now;
+    Serial.print(F("[emg] priority: all red @"));
+  }
+
   digitalWrite(PIN_BUZZ, HIGH);
-  g_emgStartMs = now; g_emgActive = true;
-  Serial.print(F("[emg] emergency vehicle priority, all red @"));
+  g_emgActive = true;
   Serial.print(now);
   Serial.println(F("ms"));
 }
@@ -190,14 +212,27 @@ static void handlePedestrian(unsigned long now) {
 }
 
 void pedestrianUpdate(unsigned long now) {
-  // 紧急模式到点就收尾。
-  // 这一段已经写好，用来示范"非阻塞地等一段时间"的标准写法：
-  //     记开始时刻 → 每轮比一次"过去了多久" → 到点了才做事。
-  // 你只要在 handleEmergency 里把 g_emgStartMs / g_emgActive 填好，这里就自动生效。
-  if (g_emgActive && (now - g_emgStartMs >= T_EMG_HOLD)) {
-    digitalWrite(PIN_BUZZ, LOW);
-    g_emgActive = false;
-    Serial.println(F("[emg] emergency over, back to normal cycle"));
+  if (g_emgActive) {
+    // 黄灯缓冲跑完了 —— 状态机自己从黄灯进入了全红，我们在同一轮就看到了
+    // （pedestrianUpdate 排在 phasesUpdate 之后）。此刻接管这一段全红：
+    // 把时长延长到 T_EMG_HOLD，并把这 5 秒的起点定在这里。
+    if (g_emgRedSince == 0 && phasesCurrent() == PHASE_ALL_RED) {
+      if (phasesDuration() < T_EMG_HOLD) {
+        phasesSetDuration(T_EMG_HOLD);    // 否则 1.5 秒后就跳绿灯了，红灯和蜂鸣器不同步
+      }
+      g_emgRedSince = now;
+      Serial.print(F("[emg] all red starts @"));
+      Serial.print(now);
+      Serial.println(F("ms"));
+    }
+
+    // 到点收尾。用的是"全红真正开始"的时刻，所以补过黄灯时不会提前 3 秒恢复。
+    if (g_emgRedSince != 0 && (now - g_emgRedSince >= T_EMG_HOLD)) {
+      digitalWrite(PIN_BUZZ, LOW);
+      g_emgActive  = false;
+      g_emgRedSince = 0;
+      Serial.println(F("[emg] emergency over, back to normal cycle"));
+    }
   }
 
   handleEmergency(now);
