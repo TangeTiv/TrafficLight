@@ -87,6 +87,12 @@ static void handleEmergency(unsigned long now) {
   if (!g_emgRequest) return;
   g_emgRequest = false;
 
+  // 已经在紧急模式里：忽略重复请求，不重置计时。
+  // 没有这一句的话，一旦按键重复或被抖动漏过，phasesGoto 会把 5 秒重新计时，
+  // 紧急模式就永远结束不了 —— 这比"多打一条日志"严重得多。
+  // 有了它，消抖就算漏了一次，系统行为也是对的（双保险）。
+  if (g_emgActive) return;
+
   // --------------------------------------------------------------------------
   //  TODO（任务二 · 第 3 处）：实现"紧急车辆立即抢占"
   //
@@ -108,19 +114,20 @@ static void handleEmergency(unsigned long now) {
   phasesGoto(PHASE_ALL_RED, T_EMG_HOLD, now);
   digitalWrite(PIN_BUZZ, HIGH);
   g_emgStartMs = now; g_emgActive = true;
-  Serial.println(F("[emg] emergency vehicle priority, all red"));
+  Serial.print(F("[emg] emergency vehicle priority, all red @"));
+  Serial.print(now);
+  Serial.println(F("ms"));
 }
 
 // 行人过街：可以等，但不能丢
 static void handlePedestrian(unsigned long now) {
-  (void)now;   // 任务二里你会用到它（比如打带时间戳的日志）
-
   if (g_pedRequest) {
     g_pedRequest = false;
     g_pedPending = true;      // 先锁存下来，等状态机走到全红再放行
-    // TODO（任务二 · 第 4 处 a）：打一行日志，说明请求已受理
-    Serial.println(F("[ped] pedRequest received"));
-
+    // 第 1 条日志：请求"排队成功"。注意此时还没放行，行人还得等。
+    Serial.print(F("[ped] request queued @"));
+    Serial.print(now);
+    Serial.println(F("ms"));
   }
 
   // --------------------------------------------------------------------------
@@ -147,6 +154,10 @@ static void handlePedestrian(unsigned long now) {
   {
     phasesSetDuration(T_PED_CROSS);
     g_pedPending = false;
+    // 第 2 条日志：行人相位真正开始。它一定发生在状态机进入全红之后。
+    Serial.print(F("[ped] cross start @"));
+    Serial.print(now);
+    Serial.println(F("ms"));
   }
 }
 
