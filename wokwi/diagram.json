@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "author": "TangeTiv",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+
+    { "type": "wokwi-resistor", "id": "r_ns_r", "top": 10, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_ns_r", "top": 0, "left": 450, "attrs": { "color": "red", "label": "NS-R" } },
+
+    { "type": "wokwi-resistor", "id": "r_ns_y", "top": 90, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_ns_y", "top": 80, "left": 450, "attrs": { "color": "yellow", "label": "NS-Y" } },
+
+    { "type": "wokwi-resistor", "id": "r_ns_g", "top": 170, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_ns_g", "top": 160, "left": 450, "attrs": { "color": "green", "label": "NS-G" } },
+
+    { "type": "wokwi-resistor", "id": "r_ew_r", "top": 250, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_ew_r", "top": 240, "left": 450, "attrs": { "color": "red", "label": "EW-R" } },
+
+    { "type": "wokwi-resistor", "id": "r_ew_y", "top": 330, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_ew_y", "top": 320, "left": 450, "attrs": { "color": "yellow", "label": "EW-Y" } },
+
+    { "type": "wokwi-resistor", "id": "r_ew_g", "top": 410, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_ew_g", "top": 400, "left": 450, "attrs": { "color": "green", "label": "EW-G" } },
+
+    { "type": "wokwi-hc-sr04", "id": "hcsr04", "top": 0, "left": 640, "attrs": { "distance": "40" } },
+
+    { "type": "wokwi-lcd1602", "id": "lcd1", "top": 130, "left": 640, "attrs": { "pins": "i2c", "background": "green", "color": "black" } },
+
+    { "type": "wokwi-pushbutton", "id": "btn_ped", "top": 530, "left": 400, "attrs": { "color": "green", "label": "行人", "key": "p", "bounce": "1" } },
+    { "type": "wokwi-pushbutton", "id": "btn_emg", "top": 530, "left": 530, "attrs": { "color": "red", "label": "紧急", "key": "e", "bounce": "1" } },
+
+    { "type": "wokwi-buzzer", "id": "bz1", "top": 530, "left": 660, "attrs": { "volume": "0.5" } }
+  ],
+  "connections": [
+    ["uno:4", "r_ns_r:1", "red", []],
+    ["r_ns_r:2", "led_ns_r:A", "red", []],
+    ["led_ns_r:C", "uno:GND.1", "black", []],
+
+    ["uno:5", "r_ns_y:1", "gold", []],
+    ["r_ns_y:2", "led_ns_y:A", "gold", []],
+    ["led_ns_y:C", "uno:GND.1", "black", []],
+
+    ["uno:6", "r_ns_g:1", "green", []],
+    ["r_ns_g:2", "led_ns_g:A", "green", []],
+    ["led_ns_g:C", "uno:GND.1", "black", []],
+
+    ["uno:7", "r_ew_r:1", "red", []],
+    ["r_ew_r:2", "led_ew_r:A", "red", []],
+    ["led_ew_r:C", "uno:GND.1", "black", []],
+
+    ["uno:8", "r_ew_y:1", "gold", []],
+    ["r_ew_y:2", "led_ew_y:A", "gold", []],
+    ["led_ew_y:C", "uno:GND.1", "black", []],
+
+    ["uno:9", "r_ew_g:1", "green", []],
+    ["r_ew_g:2", "led_ew_g:A", "green", []],
+    ["led_ew_g:C", "uno:GND.1", "black", []],
+
+    ["uno:2", "btn_ped:1.l", "green", []],
+    ["btn_ped:2.l", "uno:GND.2", "black", []],
+
+    ["uno:3", "btn_emg:1.l", "blue", []],
+    ["btn_emg:2.l", "uno:GND.2", "black", []],
+
+    ["uno:5V", "hcsr04:VCC", "red", []],
+    ["uno:GND.3", "hcsr04:GND", "black", []],
+    ["uno:10", "hcsr04:TRIG", "purple", []],
+    ["uno:11", "hcsr04:ECHO", "cyan", []],
+
+    ["uno:12", "bz1:2", "orange", []],
+    ["bz1:1", "uno:GND.3", "black", []],
+
+    ["uno:5V", "lcd1:VCC", "red", []],
+    ["uno:GND.3", "lcd1:GND", "black", []],
+    ["uno:A4", "lcd1:SDA", "purple", []],
+    ["uno:A5", "lcd1:SCL", "cyan", []]
+  ],
+  "serialMonitor": {
+    "display": "auto",
+    "newline": "lf"
+  }
+}
