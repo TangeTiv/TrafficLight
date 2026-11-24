@@ -5,7 +5,7 @@
       "label": "编译固件 (arduino-cli)",
       "detail": "产出 build/TrafficLight.ino.hex，供 Wokwi 仿真读取",
       "type": "shell",
-      "command": "C:/Users/谭/tools/arduino-cli/arduino-cli.exe",
+      "command": "${userHome}/tools/arduino-cli/arduino-cli.exe",
       "args": [
         "compile",
         "--fqbn",
