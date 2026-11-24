@@ -18,6 +18,11 @@ static volatile bool          g_emgRequest   = false;
 static volatile unsigned long g_pedLastIsrMs = 0;    // 消抖用：上次行人中断的时刻
 static volatile unsigned long g_emgLastIsrMs = 0;    // 消抖用：上次紧急中断的时刻
 
+// 按键当前是否真的按着。用来区分"按下"和"松开"——
+// 机械按键松开时弹片回弹，同样会产生下降沿，只靠 FALLING + 消抖是分不开的。
+static volatile bool          g_pedIsDown    = false;
+static volatile bool          g_emgIsDown    = false;
+
 // 已受理、正在排队等待"全红插入点"的行人请求。
 // 行人可以等，但不能丢 —— 所以它和 g_pedRequest 是两件事。
 static bool g_pedPending = false;
@@ -50,6 +55,15 @@ static void onPed() {
   if(now - g_pedLastIsrMs < DEBOUNCE_MS)
     return;
   g_pedLastIsrMs = now;
+
+  // 只有"电平真的从松开变成按下"才算一次请求。
+  // 松开时的弹跳也会进这个 ISR（FALLING），但那一瞬间引脚已经是 HIGH，
+  // 这里会直接把它的状态记为"没按"，不产生请求。
+  bool down = (digitalRead(PIN_PED) == LOW);
+  if (down == g_pedIsDown) return;   // 电平没变 → 是抖动，不是真正的沿
+  g_pedIsDown = down;
+  if (!down) return;                 // 松开：只记录状态，不请求
+
   g_pedRequest = true;
 }
 
@@ -59,6 +73,13 @@ static void onEmg() {
   if(now - g_emgLastIsrMs < DEBOUNCE_MS)
     return;
   g_emgLastIsrMs = now;
+
+  // 和行人键同理：只在"真的按下"时请求，松开时的弹跳不算。
+  bool down = (digitalRead(PIN_EMG) == LOW);
+  if (down == g_emgIsDown) return;
+  g_emgIsDown = down;
+  if (!down) return;
+
   g_emgRequest = true;
 }
 
