@@ -46,11 +46,19 @@ static void onPed() {
   //  ⚠ ISR 里不能用 delay() —— 只能比时间戳。
   //  ⚠ ISR 要短，不能在里面做串口打印、不能算配时、不能刷屏。
   // --------------------------------------------------------------------------
+  unsigned long now = millis();
+  if(now - g_pedLastIsrMs < DEBOUNCE_MS)
+    return;
+  g_pedLastIsrMs = now;
   g_pedRequest = true;
 }
 
 static void onEmg() {
   // TODO（任务二 · 第 2 处）：和上面一样，给紧急按键加消抖
+  unsigned long now = millis();
+  if(now - g_emgLastIsrMs < DEBOUNCE_MS)
+    return;
+  g_emgLastIsrMs = now;
   g_emgRequest = true;
 }
 
@@ -97,6 +105,10 @@ static void handleEmergency(unsigned long now) {
   //    这正是本实验最大的坑（见指导文档 1.3.3）。
   //    正确做法是只记一个"结束时刻"，然后在 pedestrianUpdate 里检查它。
   // --------------------------------------------------------------------------
+  phasesGoto(PHASE_ALL_RED, T_EMG_HOLD, now);
+  digitalWrite(PIN_BUZZ, HIGH);
+  g_emgStartMs = now; g_emgActive = true;
+  Serial.println(F("[emg] emergency vehicle priority, all red"));
 }
 
 // 行人过街：可以等，但不能丢
@@ -107,6 +119,8 @@ static void handlePedestrian(unsigned long now) {
     g_pedRequest = false;
     g_pedPending = true;      // 先锁存下来，等状态机走到全红再放行
     // TODO（任务二 · 第 4 处 a）：打一行日志，说明请求已受理
+    Serial.println(F("[ped] pedRequest received"));
+
   }
 
   // --------------------------------------------------------------------------
@@ -129,6 +143,11 @@ static void handlePedestrian(unsigned long now) {
   //          （提示：此刻另一个方向的绿灯还没走完黄灯。）
   //          —— 这个问题老师很可能在答辩时问你，建议写进报告。
   // --------------------------------------------------------------------------
+  if (g_pedPending && phasesCurrent() == PHASE_ALL_RED)
+  {
+    phasesSetDuration(T_PED_CROSS);
+    g_pedPending = false;
+  }
 }
 
 void pedestrianUpdate(unsigned long now) {
