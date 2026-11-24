@@ -123,11 +123,18 @@ static void handleEmergency(unsigned long now) {
 static void handlePedestrian(unsigned long now) {
   if (g_pedRequest) {
     g_pedRequest = false;
-    g_pedPending = true;      // 先锁存下来，等状态机走到全红再放行
-    // 第 1 条日志：请求"排队成功"。注意此时还没放行，行人还得等。
-    Serial.print(F("[ped] request queued @"));
-    Serial.print(now);
-    Serial.println(F("ms"));
+
+    // 已经有一个请求在排队时，重复的请求直接合并掉（不打印、不改状态）。
+    // 为什么需要：键盘自动重复约 30Hz（间隔 33ms），能穿过 30ms 消抖窗，
+    //            按住不放会产生好几条请求。和紧急模式同理，需要一层状态守卫。
+    //            注意这里不能 return —— 下面的"插入全红"逻辑还要继续走。
+    if (!g_pedPending) {
+      g_pedPending = true;    // 先锁存下来，等状态机走到全红再放行
+      // 第 1 条日志：请求"排队成功"。注意此时还没放行，行人还得等。
+      Serial.print(F("[ped] request queued @"));
+      Serial.print(now);
+      Serial.println(F("ms"));
+    }
   }
 
   // --------------------------------------------------------------------------
