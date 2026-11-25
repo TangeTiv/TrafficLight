@@ -5,6 +5,7 @@
 #include "pins.h"
 #include "display.h"
 #include "phases.h"
+#include "trafficflow.h"   // trafficflowQueueCm()：第二行显示排队长度
 
 // ============================================================================
 //  display.cpp  ·  任务四：LCD 与串口显示                 【乙 负责】
@@ -110,28 +111,59 @@ void displayUpdate(unsigned long now) {
   // --------------------------------------------------------------------------
   //  TODO（任务四 · 第 1 处）：决定屏幕上显示什么
   //
-  //  现在这个函数是空的，所以除了开机横幅以外，屏幕和串口什么都没有。
-  //
   //  最低要求：显示「当前相位名」+「距下次变灯的秒数」。
-  //  有了这两项，答辩演示时评委一眼就能看懂你的系统在干什么。
-  //  有余力再加：排队长度（advance → 直接体现你的动态配时在工作）。
+  //  有余力再加：排队长度（直接体现动态配时在工作）。
   //
-  //  可用：
-  //    phasesCurrent()        → 当前相位（Phase 类型）
-  //    phasesName(p)          → 把相位变成字符串，例如 "NS_GREEN"
-  //    phasesRemainMs(now)    → 剩余毫秒；除以 1000 就是秒
-  //    trafficflowQueueCm()   → 当前排队长度（-1 表示无效）
-  //    displayShow(第一行, 第二行)  → 已经写好的输出函数，LCD 和串口一起打
-  //    snprintf(缓冲, 长度, 格式, ...) → 拼字符串。建议用 char 缓冲，
-  //                                      不要用 String 类（会碎片化那 2KB 内存）
+  //  三个必须注意的点：
   //
-  //  两个必须注意的点：
-  //    1) 不要用 delay() 控制刷新节奏！用一个 static 变量记"上次刷新的时刻"，
-  //       间隔到了（建议 200~500ms）才刷新一次。这和任务一是同一个道理。
-  //    2) 一开始就节流。否则每轮 loop 都打串口，你会看到刷屏，
-  //       而且 9600 波特率根本来不及发 —— 看起来像"程序卡住"，其实是串口堵了。
+  //  1) 必须节流，而且不能只靠时间节流。
+  //     displayShow() 的串口侧是无条件打印（LCD 侧才有去重），
+  //     若每 250ms 调一次，20 秒的绿灯就是 80 行，会把
+  //     [ped] / [emg] / [green] 这些关键事件全淹掉。
+  //     所以采用"内容没变就不调"：只有拼出来的两行与上次不同才输出。
+  //     倒计时按秒变化 → 每秒最多一行，简洁且够看。
   //
-  //  提示：秒数最好向上取整（(ms + 999) / 1000），否则刚进入相位时会一直显示 0 秒。
+  //  2) 秒数向上取整 (ms + 999) / 1000。
+  //     直接 ms / 1000 的话，刚进入相位的第一秒内一直显示 "0s"，
+  //     看起来像倒计时卡住了。
+  //
+  //  3) 测距无效（-1）不能显示成 0cm。
+  //     0cm 会被读成"严重拥堵"，本设计里代表"没有回波"。
+  //     文案要短：LCD 只有 16 列，"queue: -- (no echo)" 会被截断成
+  //     "queue: -- (no ec"，实测过。
   // --------------------------------------------------------------------------
-  (void)now;
+  // 先按时间节流：多快也没必要超过 4Hz，省下循环开销给测距和状态机。
+  static unsigned long lastCheck = 0;
+  if (lastCheck != 0 && (now - lastCheck < 100)) return;   // 减法免疫 millis() 回绕
+  lastCheck = now;
+
+  // --- 拼两行 ---
+  char line1[LCD_COLS + 1];
+  char line2[LCD_COLS + 1];
+
+  // 第一行：相位名 + 倒计时。相位名最长 9 字符（"EW_YELLOW"），
+  // 倒计时最多 "20s"，"-10s" 左对齐后整体不超过 16 列。
+  unsigned long remainMs  = phasesRemainMs(now);
+  unsigned long remainSec = (remainMs + 999UL) / 1000UL;
+  snprintf(line1, sizeof(line1), "%-10s %lus", phasesName(phasesCurrent()), remainSec);
+
+  // 第二行：排队长度
+  float cm = trafficflowQueueCm();
+  if (cm < 0.0f) {
+    snprintf(line2, sizeof(line2), "queue: no echo");
+  } else {
+    snprintf(line2, sizeof(line2), "queue: %.1f cm", cm);
+  }
+
+  // --- 内容去重：两行都没变就不输出 ---
+  // 这是本函数最关键的优化。displayShow() 会同时写 LCD 和串口，
+  // 串口侧无去重，所以必须在这里把关。
+  static char last1[LCD_COLS + 1] = {0};
+  static char last2[LCD_COLS + 1] = {0};
+  if (strcmp(line1, last1) == 0 && strcmp(line2, last2) == 0) return;
+
+  strncpy(last1, line1, LCD_COLS); last1[LCD_COLS] = '\0';
+  strncpy(last2, line2, LCD_COLS); last2[LCD_COLS] = '\0';
+
+  displayShow(line1, line2);
 }
