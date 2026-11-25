@@ -60,6 +60,12 @@ unsigned long calcGreenTime(float queueCm) {
 //  因为绿灯时长一旦开始跑就不该中途被改 —— 否则倒计时会来回跳，
 //  而且"这个方向到底放多久"会变得无法解释。
 // ============================================================================
+// 超声波只装在**南北向**路口（见指导文档 §1.6.2 接线表：TRIG=D10 / ECHO=D11）。
+// 所以只有南北绿灯能拿到车流数据。东西向没有传感器，
+// 拿南北向的排队长度去给东西向配时是错的 —— 那等于用别人的车流决定你的灯。
+// ⚠ 如果实物上装反了，只改这一行。
+static const Phase kSensorPhase = PHASE_NS_GREEN;
+
 void greenTimeUpdate() {
   static Phase lastPhase = PHASE_ALL_RED;   // 初值故意和起始相位不同，保证开机第一次也会写入
 
@@ -67,17 +73,32 @@ void greenTimeUpdate() {
   if (p == lastPhase) return;               // 相位没变 → 什么都不做
   lastPhase = p;
 
-  if (p == PHASE_NS_GREEN || p == PHASE_EW_GREEN) {
+  if (p != PHASE_NS_GREEN && p != PHASE_EW_GREEN) return;   // 只处理绿灯相位
+
+  unsigned long ms;
+  if (p == kSensorPhase) {
+    // 这一侧有传感器：按排队长度动态配时
     float cm = trafficflowQueueCm();
-    unsigned long ms = calcGreenTime(cm);
+    ms = calcGreenTime(cm);
     phasesSetDuration(ms);
 
-    // 打一行日志，方便你验证"距离 → 时长"这条链路真的通了。
-    // 报告里的配时策略论证，靠的就是这一行行记录。
-    Serial.print(F("[green] queue="));
+    Serial.print(F("[green] "));
+    Serial.print(phasesName(p));
+    Serial.print(F(" queue="));
     Serial.print(cm, 1);
-    Serial.print(F("cm -> green="));
+    Serial.print(F("cm -> "));
     Serial.print(ms);
-    Serial.println(F("ms"));
+    Serial.println(F("ms (dynamic)"));
+  } else {
+    // 另一侧没有传感器：固定基准值，不猜。
+    // 这也是"宁可保守也不要瞎猜"的具体体现 —— 报告里要写清这个取舍。
+    ms = GREEN_BASE;
+    phasesSetDuration(ms);
+
+    Serial.print(F("[green] "));
+    Serial.print(phasesName(p));
+    Serial.print(F(" fixed "));
+    Serial.print(ms);
+    Serial.println(F("ms (no sensor)"));
   }
 }
