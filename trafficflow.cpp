@@ -39,7 +39,19 @@ static unsigned long g_lastSample = 0;       // 上次采样的时刻（节流�
 //  提示：delayMicroseconds() 是用来凑那 10 微秒脉冲的，它和 delay() 不同，
 //        只等微秒级，属于正常的硬件时序操作，不违反"禁止阻塞"的原则。
 static float readDistanceCM() {
-  return -1.0f;   // TODO: 换成真正的实现
+  // ① 先拉低再拉高，保证这次上升沿是干净的
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);        // 保持 10µs，传感器才会发那 8 个 40kHz 脉冲
+  digitalWrite(PIN_TRIG, LOW);
+
+  // ② 等 ECHO 的高电平，第三个参数是超时上限
+  unsigned long dur = pulseIn(PIN_ECHO, HIGH, ULTRASONIC_TIMEOUT_US);
+  if (dur == 0) return -1.0f;   // 超时 = 本次没测到
+
+  // ③ 换算
+  return dur / 58.0f;
 }
 
 // ============================================================================
@@ -59,7 +71,35 @@ static float readDistanceCM() {
 //      再取这 SMOOTH_SAMPLES 个数的中位数返回。
 //      可以先用 static 局部变量或文件级静态数组保存历史值。
 static float smoothDistance(float raw) {
-  return raw;     // TODO: 换成真正的实现
+  static float   buf[SMOOTH_SAMPLES];
+  static uint8_t filled = 0;                       // 已采集的样本数（≤ SMOOTH_SAMPLES）
+  static uint8_t head   = 0;                       // 下一个写入位置
+
+  // 环形缓冲：新读数覆盖最旧的
+  buf[head] = raw;
+  head = (uint8_t)((head + 1) % SMOOTH_SAMPLES);
+  if (filled < SMOOTH_SAMPLES) filled++;
+
+  // 复制出来排序。只有 5 个元素，插入排序比调 qsort 划算：
+  // 不占调用栈、不引入库、而且这个规模的插入排序本来就更快。
+  float tmp[SMOOTH_SAMPLES];
+  for (uint8_t i = 0; i < filled; i++) tmp[i] = buf[i];
+
+  for (uint8_t i = 1; i < filled; i++) {
+    float  key = tmp[i];
+    int8_t j   = (int8_t)(i - 1);
+    while (j >= 0 && tmp[j] > key) {
+      tmp[j + 1] = tmp[j];
+      j--;
+    }
+    tmp[j + 1] = key;
+  }
+
+  // 取中位数：奇数个取中间那个，偶数个取中间两个的平均。
+  // 中位数能整条扔掉"偶发的一次离谱读数"，而平均值会被它拖偏 ——
+  // 这正是选它而不选平均的原因。
+  return (filled & 1) ? tmp[filled / 2]
+                      : (tmp[filled / 2 - 1] + tmp[filled / 2]) / 2.0f;
 }
 
 // ============================================================================
@@ -84,12 +124,19 @@ void trafficflowUpdate(unsigned long now) {
   float cm = smoothDistance(raw);
   if (cm > 0.0f) g_queueCm = cm;           // 只在拿到有效值时才更新
 
-  // --------------------------------------------------------------------------
-  //  TODO（任务三 · 第 3 处，可选但强烈建议）：把原始值与滤波值打到串口
-  //  为什么要打两列：你的报告里需要一张"超声波标定表"（真实距离 vs 读数值，
-  //  至少 5 组）。有了这两列，标定表就是顺手记录的结果，而不是事后补造。
-  //  提示：可以每 500ms 才打一次，不要每轮都打，否则串口刷屏看不清。
-  // --------------------------------------------------------------------------
+  // 每 500ms 打一次"原始值 / 滤波值"。
+  // 这两列顺带就是报告里那张标定表的素材 —— 在 Wokwi 里把滑块依次设成
+  // 10 / 30 / 50 / 80 / 150，各记一行，表就出来了，不用事后补造。
+  // 每轮都打会刷屏（60ms 一次，9600 波特率根本发不完），所以必须节流。
+  static unsigned long lastLog = 0;
+  if (now - lastLog >= 500) {
+    lastLog = now;
+    Serial.print(F("[flow] raw="));
+    Serial.print(raw, 1);
+    Serial.print(F(" smooth="));
+    Serial.print(cm, 1);
+    Serial.println(F("cm"));
+  }
 }
 
 float trafficflowQueueCm() {
