@@ -5,6 +5,7 @@
 #include "pins.h"
 #include "display.h"
 #include "phases.h"
+#include "trafficflow.h"   // 任务四要显示排队长度，需要 trafficflowQueueCm()
 
 // ============================================================================
 //  display.cpp  ·  任务四：LCD 与串口显示                 【乙 负责】
@@ -76,6 +77,17 @@ void displayShow(const char* line1, const char* line2) {
   lcdWriteLine(0, line1);
   lcdWriteLine(1, line2);
 
+  // 串口也要去重。LCD 那边已经有"内容没变就不刷"的优化，但串口原来是无条件打印：
+  // 倒计时按秒变化，20 秒的绿灯就会刷 20 行（4Hz 刷新则是 80 行），
+  // 把相位切换、行人、紧急全埋掉 —— 和刚才修 [flow] 是同一个问题。
+  static char last1[LCD_COLS + 1] = {0};
+  static char last2[LCD_COLS + 1] = {0};
+  if (strncmp(last1, line1, LCD_COLS) == 0 &&
+      strncmp(last2, line2, LCD_COLS) == 0) return;
+
+  strncpy(last1, line1, LCD_COLS); last1[LCD_COLS] = '\0';
+  strncpy(last2, line2, LCD_COLS); last2[LCD_COLS] = '\0';
+
   Serial.print(line1);
   Serial.print(F("  |  "));
   Serial.println(line2);
@@ -94,7 +106,7 @@ void displayInit() {
   lcd.setCursor(0, 0);
   lcd.print("TrafficLight");
   lcd.setCursor(0, 1);
-  lcd.print("vs0.0 ready");
+  lcd.print("  ready");
   Serial.println(F("[display] LCD initialized, showing boot banner"));
   Serial.println(F("[display] backlight on but no text -> fix LCD_I2C_ADDR in pins.h, or turn the blue trimpot"));
 #else
@@ -107,31 +119,34 @@ void displayInit() {
 //  ★★★ 任务四：要你实现的就是下面这一个函数 ★★★
 // ============================================================================
 void displayUpdate(unsigned long now) {
-  // --------------------------------------------------------------------------
-  //  TODO（任务四 · 第 1 处）：决定屏幕上显示什么
-  //
-  //  现在这个函数是空的，所以除了开机横幅以外，屏幕和串口什么都没有。
-  //
-  //  最低要求：显示「当前相位名」+「距下次变灯的秒数」。
-  //  有了这两项，答辩演示时评委一眼就能看懂你的系统在干什么。
-  //  有余力再加：排队长度（advance → 直接体现你的动态配时在工作）。
-  //
-  //  可用：
-  //    phasesCurrent()        → 当前相位（Phase 类型）
-  //    phasesName(p)          → 把相位变成字符串，例如 "NS_GREEN"
-  //    phasesRemainMs(now)    → 剩余毫秒；除以 1000 就是秒
-  //    trafficflowQueueCm()   → 当前排队长度（-1 表示无效）
-  //    displayShow(第一行, 第二行)  → 已经写好的输出函数，LCD 和串口一起打
-  //    snprintf(缓冲, 长度, 格式, ...) → 拼字符串。建议用 char 缓冲，
-  //                                      不要用 String 类（会碎片化那 2KB 内存）
-  //
-  //  两个必须注意的点：
-  //    1) 不要用 delay() 控制刷新节奏！用一个 static 变量记"上次刷新的时刻"，
-  //       间隔到了（建议 200~500ms）才刷新一次。这和任务一是同一个道理。
-  //    2) 一开始就节流。否则每轮 loop 都打串口，你会看到刷屏，
-  //       而且 9600 波特率根本来不及发 —— 看起来像"程序卡住"，其实是串口堵了。
-  //
-  //  提示：秒数最好向上取整（(ms + 999) / 1000），否则刚进入相位时会一直显示 0 秒。
-  // --------------------------------------------------------------------------
-  (void)now;
+  // 200ms 刷一次。倒计时是按秒变的，200ms 足够及时；
+  // 和任务一一样用"记上次时刻"节流，绝不用 delay()。
+  static unsigned long lastRefresh = 0;
+  if (now - lastRefresh < 200) return;
+  lastRefresh = now;
+
+  unsigned long remainMs = phasesRemainMs(now);
+  unsigned long remainS  = (remainMs + 999) / 1000;   // 向上取整，否则刚进相位会一直显示 0
+
+  char line1[LCD_COLS + 1];
+  char line2[LCD_COLS + 1];
+
+  // 第一行：相位名 + 倒计时。相位名最长 9 字符（EW_YELLOW），左对齐占 9 位，
+  // 后面跟 3 位的秒数，合计 12 字符，16 列的屏放得下。
+  snprintf(line1, sizeof(line1), "%-9s%3lus", phasesName(phasesCurrent()), remainS);
+
+  // 第二行：排队长度。-1 表示测距无效，要显示 "--" 而不是 0 ——
+  // 0 会被误读成"车贴脸堵死"，和"没测到"完全是两回事。
+  float cm = trafficflowQueueCm();
+  if (cm < 0.0f) {
+    snprintf(line2, sizeof(line2), "Q:--");
+  } else {
+    // ⚠ AVR 的 snprintf 默认不支持 %f（会输出一个问号，因为没链接浮点 printf）。
+    //   必须先四舍五入转成整数再打印 —— 这也是骨架里用 Serial.print(cm, 1)
+    //   而不是 printf 的原因。
+    int cmInt = (int)(cm + 0.5f);
+    snprintf(line2, sizeof(line2), "Q:%3dcm", cmInt);
+  }
+
+  displayShow(line1, line2);
 }
