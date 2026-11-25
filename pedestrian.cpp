@@ -56,34 +56,34 @@ static void onPed() {
   //  ⚠ ISR 里不能用 delay() —— 只能比时间戳。
   //  ⚠ ISR 要短，不能在里面做串口打印、不能算配时、不能刷屏。
   // --------------------------------------------------------------------------
-  unsigned long now = millis();
-  if(now - g_pedLastIsrMs < DEBOUNCE_MS)
-    return;
-  g_pedLastIsrMs = now;
-
-  // 只有"电平真的从松开变成按下"才算一次请求。
-  // 松开时的弹跳也会进这个 ISR（FALLING），但那一瞬间引脚已经是 HIGH，
-  // 这里会直接把它的状态记为"没按"，不产生请求。
+  // ★ 先处理"电平变化"，不受消抖限制。
+  //   如果像原来那样把消抖放在最前面：一次"按下→松开"若短于 DEBOUNCE_MS，
+  //   松开那次中断会被挡掉，g_pedIsDown 就永远停在 true，
+  //   之后每次按下都判成"电平没变"→ 按键永久失灵（实测踩到过）。
   bool down = (digitalRead(PIN_PED) == LOW);
   if (down == g_pedIsDown) return;   // 电平没变 → 是抖动，不是真正的沿
   g_pedIsDown = down;
-  if (!down) return;                 // 松开：只记录状态，不请求
+  if (!down) return;                 // 松开：只记录状态，不产生请求
+
+  // 只有"变成按下"才需要消抖，用来挡住同一次弹跳里的十几次回声
+  unsigned long now = millis();
+  if (now - g_pedLastIsrMs < DEBOUNCE_MS) return;
+  g_pedLastIsrMs = now;
 
   g_pedRequest = true;
 }
 
 static void onEmg() {
   // TODO（任务二 · 第 2 处）：和上面一样，给紧急按键加消抖
-  unsigned long now = millis();
-  if(now - g_emgLastIsrMs < DEBOUNCE_MS)
-    return;
-  g_emgLastIsrMs = now;
-
-  // 和行人键同理：只在"真的按下"时请求，松开时的弹跳不算。
+  // 和行人键同理：先判别电平变化，再做"按下"侧的消抖。
   bool down = (digitalRead(PIN_EMG) == LOW);
   if (down == g_emgIsDown) return;
   g_emgIsDown = down;
   if (!down) return;
+
+  unsigned long now = millis();
+  if (now - g_emgLastIsrMs < DEBOUNCE_MS) return;
+  g_emgLastIsrMs = now;
 
   g_emgRequest = true;
 }

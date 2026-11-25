@@ -34,9 +34,9 @@ void setup() {
 
   Serial.println();
   Serial.println(F("=================================================="));
-  Serial.println(F(" Smart Traffic Light   skeleton vs0.0"));
-  Serial.println(F(" Hardware: Arduino Uno   guide: Lab 1"));
-  Serial.println(F(" All tasks are TODO. See the module files."));
+  Serial.println(F(" Smart Traffic Light   Arduino Uno"));
+  Serial.println(F(" Tasks 1-3 done: 4-phase / ped+emg / adaptive"));
+  Serial.println(F(" LCD: set USE_LCD1602 in pins.h when ready"));
   Serial.println(F("=================================================="));
 
   phasesInit();          // 任务一(甲)：六个灯设为输出、进入初始相位、点亮
@@ -46,7 +46,7 @@ void setup() {
   trafficflowInit();     // 任务三(乙)：超声波引脚
   displayInit();         // 任务四(乙)：I2C 扫描 + （可选）LCD 初始化
 
-  Serial.println(F("[boot] ready. Start with the TODO in phases.cpp"));
+  Serial.println(F("[boot] ready. normal cycle running."));
 }
 
 void loop() {

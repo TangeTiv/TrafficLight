@@ -124,13 +124,17 @@ void trafficflowUpdate(unsigned long now) {
   float cm = smoothDistance(raw);
   if (cm > 0.0f) g_queueCm = cm;           // 只在拿到有效值时才更新
 
-  // 每 500ms 打一次"原始值 / 滤波值"。
-  // 这两列顺带就是报告里那张标定表的素材 —— 在 Wokwi 里把滑块依次设成
-  // 10 / 30 / 50 / 80 / 150，各记一行，表就出来了，不用事后补造。
-  // 每轮都打会刷屏（60ms 一次，9600 波特率根本发不完），所以必须节流。
-  static unsigned long lastLog = 0;
-  if (now - lastLog >= 500) {
-    lastLog = now;
+  // 只在"读数有明显变化（≥1cm）"或"每 2 秒"时打印。
+  // 原来固定 500ms 一条，20 秒的绿灯里就刷 40 行，
+  // 把相位切换、行人、紧急这些关键事件全淹没了 —— 长时间运行时根本没法读。
+  // 改成事件驱动之后：静止时安静，拖滑块时立刻能看到变化。
+  static unsigned long lastLogMs = 0;
+  static float         lastLogCm = -1000.0f;
+  float diff = (cm > lastLogCm) ? (cm - lastLogCm) : (lastLogCm - cm);
+  if (diff >= 1.0f || now - lastLogMs >= 2000) {
+    lastLogMs = now;
+    lastLogCm = cm;
+
     Serial.print(F("[flow] raw="));
     Serial.print(raw, 1);
     Serial.print(F(" smooth="));
