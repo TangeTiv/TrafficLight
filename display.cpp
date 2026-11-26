@@ -148,11 +148,21 @@ void displayUpdate(unsigned long now) {
   snprintf(line1, sizeof(line1), "%-10s %lus", phasesName(phasesCurrent()), remainSec);
 
   // 第二行：排队长度
+  // ⚠ 不能用 snprintf 的 %f！avr-libc 默认不链接浮点版 vfprintf，
+  //    %f 会直接输出一个 '?'，屏幕上就成了 "queue: ? cm"。
+  //    实测 avr-nm 只能看到 vfprintf，没有 printf_flt。
+  //    两个解法：(a) 手工拆整数/小数，(b) 编译加 -Wl,-u,vfprintf -lprintf_flt。
+  //    这里选 (a)：不增加固件体积，也不用改 tasks.json 这个共享的构建配置。
+  //    （Serial.print(cm, 1) 不受影响，Print 类走的是自己的 dtostrf，不经 snprintf。）
   float cm = trafficflowQueueCm();
   if (cm < 0.0f) {
     snprintf(line2, sizeof(line2), "queue: no echo");
   } else {
-    snprintf(line2, sizeof(line2), "queue: %.1f cm", cm);
+    // 四舍五入到 1 位小数，并处理 9.96 -> 10.0 这种进位
+    unsigned int whole = (unsigned int)cm;
+    unsigned int frac  = (unsigned int)((cm - (float)whole) * 10.0f + 0.5f);
+    if (frac >= 10U) { frac = 0U; whole++; }
+    snprintf(line2, sizeof(line2), "queue: %u.%u cm", whole, frac);
   }
 
   // --- 内容去重：两行都没变就不输出 ---
